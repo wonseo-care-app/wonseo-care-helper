@@ -33,6 +33,18 @@ interface DocumentComposerProps {
   onAreaChange: (area: DevelopmentArea) => void;
 }
 
+
+const GEMINI_REWRITE_GUIDE = `아래 글을 어린이집 보육교사가 실제 알림장/보육문서에 쓰는 자연스러운 문체로 다듬어줘.
+
+조건:
+- AI가 쓴 티 나지 않게 해줘.
+- 너무 과장하거나 감성적으로 쓰지 말고 담백하게 써줘.
+- 부모님이 읽기에 따뜻하지만 부담스럽지 않게 써줘.
+- 관찰한 행동 중심으로 써줘.
+- 없는 사실은 추가하지 말아줘.
+- 문장은 바로 복사해서 키즈노트나 보육문서에 붙여넣을 수 있게 해줘.
+- 아이 이름, 놀이 내용, 식사, 낮잠, 친구와의 상호작용은 아래 내용에서 벗어나지 말고 자연스럽게 정리해줘.`;
+
 const adaptationLabels: Array<{
   key: keyof AdaptationDay;
   label: string;
@@ -77,6 +89,24 @@ export function DocumentComposer({
   const Icon = config.icon;
   const plainForm = formData as PlainFormData;
   const adaptationForm = formData as AdaptationFormData;
+
+  const copyGeminiPrompt = async () => {
+    if (!result.trim()) {
+      return;
+    }
+
+    const text = `${GEMINI_REWRITE_GUIDE}
+
+초안:
+${result.trim()}`;
+
+    try {
+      await navigator.clipboard.writeText(text);
+      window.alert("Gemini용 프롬프트를 복사했습니다. Gemini에 붙여넣어 주세요.");
+    } catch {
+      window.alert("복사에 실패했습니다. 결과를 직접 선택해 복사해 주세요.");
+    }
+  };
 
   return (
     <main className="mx-auto w-full max-w-2xl px-4 pb-24 pt-4">
@@ -301,6 +331,16 @@ export function DocumentComposer({
             저장하기
           </button>
         </div>
+
+        <button
+          className="btn-secondary w-full"
+          type="button"
+          onClick={copyGeminiPrompt}
+          disabled={!result}
+        >
+          <Clipboard size={20} aria-hidden />
+          Gemini용 프롬프트 복사
+        </button>
       </section>
     </main>
   );

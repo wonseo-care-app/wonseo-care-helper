@@ -1,0 +1,13 @@
+.env
+.env.local
+.next
+node_modules
+out
+dist
+.netlify
+coverage
+*.log
+.tools
+reference-extracts
+tsconfig.tsbuildinfo
+verification-*.png

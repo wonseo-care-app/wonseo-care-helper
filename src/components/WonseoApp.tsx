@@ -34,31 +34,58 @@ const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const isAdaptation = (form: PlainFormData | AdaptationFormData): form is AdaptationFormData =>
   "days" in form;
 
+const makeEmptyPlainForm = (docType: DocumentType): PlainFormData =>
+  documentConfigs[docType].fields.reduce<PlainFormData>((acc, field) => {
+    acc[field.name] = "";
+    return acc;
+  }, {});
+
+const makeEmptyAdaptationForm = (profile?: ChildProfile): AdaptationFormData => ({
+  className: profile?.className ?? "",
+  childName: profile?.childName ?? "",
+  teacher: "",
+  days: Array.from({ length: 5 }, (_, index) => {
+    const day = makeAdaptationDay(index + 1);
+    return {
+      ...day,
+      date: "",
+      time: "",
+      activityKeywords: "",
+      separation: "",
+      teacherResponse: "",
+      playParticipation: "",
+      meal: "",
+      peerRelation: "",
+      specialNote: "",
+      supportPlan: ""
+    };
+  })
+});
+
 const applyProfileToForm = (
   docType: DocumentType,
   formData: PlainFormData | AdaptationFormData,
   profile?: ChildProfile
 ) => {
-  if (!profile) return formData;
-
   if (isAdaptation(formData)) {
-    return {
-      ...formData,
-      childName: profile.childName,
-      className: profile.className
-    };
+    return makeEmptyAdaptationForm(profile);
   }
 
-  const next = { ...formData };
+  const next = makeEmptyPlainForm(docType);
+
+  if (!profile) return next;
+
   if ("childName" in next) next.childName = profile.childName;
   if ("gender" in next) next.gender = profile.gender;
   if ("birthDate" in next) next.birthDate = profile.birthDate;
   if ("className" in next) next.className = profile.className;
   if ("age" in next) next.age = profile.age;
+
   if (docType === "careLog") {
     next.className = profile.className;
     next.ageGroup = profile.age;
   }
+
   return next;
 };
 

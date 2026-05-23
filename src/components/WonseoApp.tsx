@@ -34,58 +34,79 @@ const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const isAdaptation = (form: PlainFormData | AdaptationFormData): form is AdaptationFormData =>
   "days" in form;
 
-const makeEmptyPlainForm = (docType: DocumentType): PlainFormData =>
-  documentConfigs[docType].fields.reduce<PlainFormData>((acc, field) => {
-    acc[field.name] = "";
-    return acc;
-  }, {});
+const GEMINI_REWRITE_GUIDE = `아래 글을 어린이집 보육교사가 실제 알림장/보육문서에 쓰는 자연스러운 문체로 다듬어줘.
 
-const makeEmptyAdaptationForm = (profile?: ChildProfile): AdaptationFormData => ({
-  className: profile?.className ?? "",
-  childName: profile?.childName ?? "",
-  teacher: "",
-  days: Array.from({ length: 5 }, (_, index) => {
-    const day = makeAdaptationDay(index + 1);
-    return {
-      ...day,
-      date: "",
-      time: "",
-      activityKeywords: "",
-      separation: "",
-      teacherResponse: "",
-      playParticipation: "",
-      meal: "",
-      peerRelation: "",
-      specialNote: "",
-      supportPlan: ""
-    };
-  })
+조건:
+- AI가 쓴 티 나지 않게 해줘.
+- 너무 과장하거나 감성적으로 쓰지 말고 담백하게 써줘.
+- 부모님이 읽기에 따뜻하지만 부담스럽지 않게 써줘.
+- 관찰한 행동 중심으로 써줘.
+- 없는 사실은 추가하지 말아줘.
+- 문장은 바로 복사해서 키즈노트나 보육문서에 붙여넣을 수 있게 해줘.
+- 아이 이름, 놀이 내용, 식사, 낮잠, 친구와의 상호작용은 아래 내용에서 벗어나지 말고 자연스럽게 정리해줘.`;
+
+const wrapForGemini = (text: string) => `${GEMINI_REWRITE_GUIDE}
+
+초안:
+${text.trim()}`;
+
+const stripGeminiGuide = (text: string) => {
+  const marker = "초안:";
+  const index = text.indexOf(marker);
+  return index >= 0 ? text.slice(index + marker.length).trim() : text;
+};
+
+const clearAdaptationDay = (day: AdaptationDay, index: number): AdaptationDay => ({
+  ...day,
+  dayLabel: day.dayLabel || `${index + 1}일차`,
+  date: "",
+  time: "",
+  activityKeywords: "",
+  separation: "",
+  teacherResponse: "",
+  playParticipation: "",
+  meal: "",
+  peerRelation: "",
+  specialNote: "",
+  supportPlan: ""
 });
+
+const createBlankPlainForm = (docType: DocumentType, formData: PlainFormData) => {
+  const next = Object.fromEntries(Object.keys(formData).map((key) => [key, ""])) as PlainFormData;
+
+  if (docType === "development" && "term" in formData) {
+    next.term = formData.term || "1학기";
+  }
+
+  return next;
+};
 
 const applyProfileToForm = (
   docType: DocumentType,
   formData: PlainFormData | AdaptationFormData,
   profile?: ChildProfile
 ) => {
+  if (!profile) return formData;
+
   if (isAdaptation(formData)) {
-    return makeEmptyAdaptationForm(profile);
+    return {
+      ...formData,
+      childName: profile.childName,
+      className: profile.className,
+      days: formData.days.map(clearAdaptationDay)
+    };
   }
 
-  const next = makeEmptyPlainForm(docType);
-
-  if (!profile) return next;
-
+  const next = createBlankPlainForm(docType, formData);
   if ("childName" in next) next.childName = profile.childName;
   if ("gender" in next) next.gender = profile.gender;
   if ("birthDate" in next) next.birthDate = profile.birthDate;
   if ("className" in next) next.className = profile.className;
   if ("age" in next) next.age = profile.age;
-
   if (docType === "careLog") {
     next.className = profile.className;
     next.ageGroup = profile.age;
   }
-
   return next;
 };
 
@@ -218,7 +239,7 @@ export function WonseoApp() {
         docType: activeDoc,
         action,
         formData,
-        existingText: action.startsWith("rewrite") ? result : undefined,
+        existingText: action.startsWith("rewrite") ? stripGeminiGuide(result) : undefined,
         area: activeDoc === "development" ? area : undefined
       };
       const response = await fetch("/api/generate", {
@@ -230,7 +251,7 @@ export function WonseoApp() {
       if (!response.ok || !data.text) {
         throw new Error(data.error || "생성에 실패했습니다. 입력 내용을 조금 더 적어주세요.");
       }
-      setResult(data.text);
+      setResult(wrapForGemini(data.text));
       setToast(data.source === "local" ? "API 키 없이 예시 문장으로 만들었습니다." : "생성했습니다.");
     } catch (error) {
       setToast(error instanceof Error ? error.message : "생성에 실패했습니다. 입력 내용을 조금 더 적어주세요.");
